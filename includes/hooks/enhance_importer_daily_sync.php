@@ -41,6 +41,6 @@ add_hook('DailyCronJob', 1, function () {
             logActivity('Enhance Importer daily sync: server #' . (int)$server->id . ', checked ' . (int)$result['checked'] . ', updated ' . (int)$result['updated']);
         }
     } catch (Throwable $e) {
-        logActivity('Enhance Importer daily sync failed: ' . $e->getMessage());
+        logActivity('Enhance Importer daily sync failed: operation_error');
     }
 });

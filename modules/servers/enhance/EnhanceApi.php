@@ -8,6 +8,7 @@
  */
 
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/EnhanceLog.php';
 
 use WHMCS\Database\Capsule;
 
@@ -120,13 +121,14 @@ class EnhanceApi
         $raw      = curl_exec($ch);
         $curlErr  = curl_error($ch);
         $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlCode = curl_errno($ch);
+        $duration = (float) curl_getinfo($ch, CURLINFO_TOTAL_TIME);
         curl_close($ch);
 
-        if ($this->debug) {
-            $this->writeLog(['method' => $method, 'url' => $url, 'status' => $httpCode, 'response' => $raw]);
-        }
-
-        logModuleCall('enhance', "{$method} {$path}", $body, $raw, $raw, []);
+        $metadata = EnhanceLog::metadata($method, $path, $httpCode, $curlCode, $duration, $this->debug);
+        logModuleCall('enhance', $metadata['method'] . ' ' . $metadata['endpoint'],
+            ['method' => $metadata['method'], 'endpoint' => $metadata['endpoint']],
+            $metadata, [], EnhanceLog::replacements($this->apiKey, $body));
 
         if ($curlErr) {
             return ['code' => 'curl_error', 'message' => $curlErr, '_httpCode' => $httpCode];
@@ -146,12 +148,6 @@ class EnhanceApi
         }
 
         return ['_raw' => trim((string) $raw), '_httpCode' => $httpCode];
-    }
-    private function writeLog(array $entry): void
-    {
-        $dir = __DIR__ . '/logs/' . date('d-m-Y');
-        if (!is_dir($dir)) mkdir($dir, 0750, true);
-        file_put_contents("{$dir}/enhance.log", '[' . date('H:i:s') . '] ' . json_encode($entry) . PHP_EOL, FILE_APPEND | LOCK_EX);
     }
 
     // -------------------------------------------------------------------------

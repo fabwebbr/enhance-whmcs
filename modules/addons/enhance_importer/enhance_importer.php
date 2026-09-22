@@ -260,7 +260,7 @@ function enhance_importer_build_pricing($currencies, string $monthly, string $an
 function enhance_importer_save_map(int $serverId, string $planId, int $productId, string $name, array $plan): void
 {
     $exists = Capsule::table('mod_enhance_package_map')->where('server_id',$serverId)->where('enhance_plan_id',$planId)->exists();
-    $data = ['whmcs_product_id'=>$productId,'plan_name'=>$name,'plan_snapshot'=>json_encode($plan),'updated_at'=>date('Y-m-d H:i:s')];
+    $data = ['whmcs_product_id'=>$productId,'plan_name'=>$name,'plan_snapshot'=>EnhanceLog::snapshot(),'updated_at'=>date('Y-m-d H:i:s')];
     if ($exists) Capsule::table('mod_enhance_package_map')->where('server_id',$serverId)->where('enhance_plan_id',$planId)->update($data);
     else { $data['server_id']=$serverId; $data['enhance_plan_id']=$planId; $data['created_at']=date('Y-m-d H:i:s'); Capsule::table('mod_enhance_package_map')->insert($data); }
 }
@@ -737,7 +737,7 @@ function enhance_importer_save_service_log(int $serverId, string $orgId, string 
 {
     enhance_importer_ensure_schema();
     $exists = Capsule::table('mod_enhance_service_import_log')->where('server_id',$serverId)->where('enhance_subscription_id',$subId)->exists();
-    $data=['enhance_org_id'=>$orgId,'client_id'=>$clientId,'service_id'=>$serviceId,'product_id'=>$productId,'status'=>$status,'snapshot'=>json_encode($snapshot),'updated_at'=>date('Y-m-d H:i:s')];
+    $data=['enhance_org_id'=>$orgId,'client_id'=>$clientId,'service_id'=>$serviceId,'product_id'=>$productId,'status'=>$status,'snapshot'=>EnhanceLog::snapshot(),'updated_at'=>date('Y-m-d H:i:s')];
     if ($exists) Capsule::table('mod_enhance_service_import_log')->where('server_id',$serverId)->where('enhance_subscription_id',$subId)->update($data);
     else { $data['server_id']=$serverId; $data['enhance_subscription_id']=$subId; $data['created_at']=date('Y-m-d H:i:s'); Capsule::table('mod_enhance_service_import_log')->insert($data); }
 }

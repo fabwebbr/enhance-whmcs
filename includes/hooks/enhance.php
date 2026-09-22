@@ -35,7 +35,7 @@ add_hook('ClientEdit', 1, function (array $vars): void {
         $name = trim((string) ($client->firstname ?? '') . ' ' . (string) ($client->lastname ?? ''));
         $api->syncCustomerFromWhmcs((int) $client->id, $name, (string) $client->email, (string) ($client->companyname ?? ''));
     } catch (Exception $e) {
-        logActivity('Enhance client sync failed for client #' . (int) $vars['userid'] . ': ' . $e->getMessage());
+        logActivity('Enhance client sync failed for client #' . (int) $vars['userid'] . ': operation_error');
     }
 });
 add_hook('AdminClientProfileTabFields', 1, function (array $vars): array {
@@ -274,8 +274,8 @@ add_hook('DailyCronJob', 1, function (array $vars): void {
     }
     try {
         $result = enhance_importer_run_daily_sync(true, 0);
-        logActivity('Enhance daily sync completed: ' . ($result['message'] ?? 'done'));
+        logActivity('Enhance daily sync completed');
     } catch (Exception $e) {
-        logActivity('Enhance daily sync failed: ' . $e->getMessage());
+        logActivity('Enhance daily sync failed: operation_error');
     }
 });

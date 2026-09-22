@@ -2,6 +2,71 @@
 
 Professional WHMCS provisioning and automation module for Enhance Control Panel.
 
+## Revisão local: Fase 0 mínima e Fase 1A — logging
+
+Esta entrega limita-se à base de testes e aos destinos de logging. Não representa
+homologação de produção nem corrige os demais achados da auditoria. As alegações
+de versão/compatibilidade e instruções históricas abaixo ainda precisam de revisão.
+Não é necessário Composer para executar os testes desta entrega.
+
+### Política de logging
+
+- `EnhanceLog::metadata()` constrói uma lista permitida de metadados: método,
+  rota padronizada, HTTP e categoria genérica. Não recebe corpo, resposta ou mensagem
+  de erro. `http_response` indica recebimento HTTP, não sucesso funcional da API.
+- `EnhanceLog::endpoint()` reconhece somente rotas conhecidas, troca todos os IDs
+  por `{id}` e descarta toda query string. Rotas desconhecidas recebem um marcador
+  fixo; hostname, e-mail, token e segmentos arbitrários nunca são copiados.
+- `ENHANCE_DEBUG=true` acrescenta duração em milissegundos e código numérico do cURL
+  ao Module Log. Não há mais escrita própria em `modules/servers/enhance/logs/`.
+- Os primeiros cinco argumentos de `logModuleCall()` contêm somente metadados;
+  o argumento de dados processados é vazio. O sexto argumento continua contendo
+  a API key e strings da requisição como **controle de substituição do WHMCS**.
+  Essa lista é interna, contém segredos por definição e nunca deve ser persistida
+  ou impressa. Ela é uma segunda camada, não a estratégia principal de segurança.
+- Activity Log conserva eventos, IDs locais numéricos e contagens; mensagens de
+  exceção e mensagens livres de resultados foram substituídas por textos fixos.
+- As colunas diagnósticas `plan_snapshot` e `snapshot` passam a receber somente
+  `{"payload_omitted":true}`. IDs, nomes de plano e demais colunas de mapeamento
+  funcional permanecem inalterados. O código atual não lê esses snapshots para
+  provisionar, importar ou sincronizar.
+
+Os únicos ajustes nos hooks e no importador são nesses destinos de logging.
+Corpos enviados, respostas devolvidas (inclusive mensagens de erro e URLs de SSO),
+endpoints e assinaturas públicas permanecem preservados. Nenhuma lógica de cron,
+associação, importação, provisionamento ou envio de senha por e-mail foi corrigida.
+
+### Testes isolados em PHP 8.1
+
+Consulte [tests/README.md](tests/README.md). Com PHP 8.1 disponível:
+
+```sh
+php -n tests/run.php
+```
+
+Sem dependências de produção/teste adicionais, Composer, WHMCS, banco real ou API
+Enhance. O runner recusa cURL nativo e usa funções falsas; não realiza conexões.
+
+### Limitações e validação desta entrega
+
+Na implementação, PHP não foi encontrado no PATH nem nos caminhos locais usuais;
+`php -n tests/run.php` falhou com `command not found`. O cliente Docker existe, mas
+a consulta de imagens locais foi negada pelo acesso ao socket. Os testes e o lint
+PHP **não foram executados**. Nenhuma imagem/pacote foi baixado ou instalado.
+A revisão estática e `git diff --check` não substituem a execução em PHP 8.1.
+
+Logs/snapshots históricos não são apagados por esta entrega. Sua eventual limpeza
+precisa ser planejada separadamente. O WHMCS, outros hooks, ferramentas de tracing
+e logs do runtime podem registrar dados fora destes destinos; a resposta funcional
+continua completa para os chamadores. O histórico de e-mail e o fluxo de senha
+inicial permanecem fora do escopo. A integração real com o Module Log deve ser
+homologada com dados fictícios antes de produção.
+
+Para reversão futura, restaurar os arquivos modificados desta entrega e remover
+`EnhanceLog.php` somente junto da reversão de seus consumidores. Não há migração de
+schema. A reversão reintroduz o logging inseguro; não deve ser usada em produção
+com logs ativos. Snapshots já omitidos não são reconstruídos.
+
 ---
 
 ## Latest Stable Release
