@@ -1,5 +1,5 @@
 <?php
-// Loaded only after run.php verifies that native cURL is unavailable.
+// Global fakes are declared only after the isolation guard passes.
 namespace WHMCS\Database {
     final class Capsule
     {
@@ -21,17 +21,23 @@ namespace WHMCS\Database {
 }
 
 namespace {
+    if (!defined('ENHANCE_TEST_ISOLATED') || function_exists('curl_init')) {
+        throw new \RuntimeException('Use sh tests/php-isolated.sh tests/run.php');
+    }
     foreach (['CURLOPT_URL', 'CURLOPT_RETURNTRANSFER', 'CURLOPT_CUSTOMREQUEST',
         'CURLOPT_HTTPHEADER', 'CURLOPT_TIMEOUT', 'CURLOPT_SSL_VERIFYHOST',
         'CURLOPT_SSL_VERIFYPEER', 'CURLOPT_POSTFIELDS', 'CURLINFO_HTTP_CODE',
         'CURLINFO_TOTAL_TIME'] as $index => $name) {
-        define($name, $index + 1);
+        if (!defined($name)) { define($name, $index + 1); }
     }
     $GLOBALS['httpQueue'] = [];
     $GLOBALS['requests'] = [];
     $GLOBALS['moduleLogs'] = [];
     $GLOBALS['activityLogs'] = [];
 
+    // Conditional declaration avoids collisions during standalone PHP lint.
+    // This is NOT a fallback: the guard above throws if isolation is absent.
+    if (defined('ENHANCE_TEST_ISOLATED')) {
     function curl_init() { return (object) ['options' => [], 'reply' => null]; }
     function curl_setopt_array($ch, $options) { $ch->options = $options; return true; }
     function curl_setopt($ch, $option, $value) { $ch->options[$option] = $value; return true; }
@@ -56,4 +62,5 @@ namespace {
     }
     function logActivity($message) { $GLOBALS['activityLogs'][] = $message; }
     function localAPI(...$args) { throw new \RuntimeException('Unexpected WHMCS API call'); }
+    }
 }

@@ -1,11 +1,22 @@
 <?php
-/** Standalone, dependency-free tests. Run: php -n tests/run.php */
+/** Standalone, dependency-free tests. Run: sh tests/php-isolated.sh tests/run.php */
 if (PHP_VERSION_ID < 80100) {
     fwrite(STDERR, "PHP 8.1 or newer required.\n"); exit(2);
 }
-if (function_exists('curl_init')) {
-    fwrite(STDERR, "Refusing to run with native cURL. Use php -n; tests never use real HTTP.\n"); exit(2);
+$nativeFunctions = array_merge(get_extension_funcs('curl') ?: [], get_extension_funcs('sockets') ?: [], [
+    'curl_init', 'curl_setopt_array', 'curl_setopt', 'curl_exec', 'curl_error',
+    'curl_errno', 'curl_getinfo', 'curl_close', 'fsockopen', 'pfsockopen',
+    'stream_socket_client', 'stream_socket_server', 'stream_socket_sendto',
+]);
+foreach ($nativeFunctions as $function) {
+    if (function_exists($function)) {
+        fwrite(STDERR, "Isolation required: use sh tests/php-isolated.sh tests/run.php\n"); exit(2);
+    }
 }
+if (filter_var(ini_get('allow_url_fopen'), FILTER_VALIDATE_BOOLEAN)) {
+    fwrite(STDERR, "URL streams must be disabled by tests/php-isolated.sh\n"); exit(2);
+}
+define('ENHANCE_TEST_ISOLATED', true);
 require __DIR__ . '/fakes.php';
 define('WHMCS', true);
 require __DIR__ . '/../modules/servers/enhance/EnhanceApi.php';
@@ -89,7 +100,7 @@ foreach ([false, true] as $debug) {
         check(json_decode(request()[CURLOPT_POSTFIELDS], true) === ['email' => EMAIL], 'Recovery email changed');
         check($result === ['_raw' => '', '_httpCode' => 204], '204 return changed');
     };
-    foreach ([SSO, json_encode(SSO), json_encode(['url' => SSO]), json_encode(['loginUrl' => SSO])] as $index => $raw) {
+    foreach ([SSO, json_encode(SSO, JSON_UNESCAPED_SLASHES), json_encode(['url' => SSO]), json_encode(['loginUrl' => SSO])] as $index => $raw) {
         $tests['SSO preserved format ' . $index . ' / ' . $suffix] = static function () use ($debug, $raw): void {
             reply(json_encode(['items' => [['id' => 'fake-owner', 'roles' => ['Owner'], 'isActive' => true]]]));
             reply($raw);

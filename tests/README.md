@@ -4,13 +4,29 @@ Requer PHP 8.1 ou posterior. Não requer Composer nem qualquer pacote novo.
 Para validar a versão alvo, execute com o binário PHP 8.1.34 de homologação:
 
 ```sh
-php -n tests/run.php
+sh tests/php-isolated.sh tests/run.php
 ```
 
-`-n` ignora o php.ini, evitando extensões de instrumentação e o cURL normalmente
-carregado como extensão. Se cURL estiver compilado estaticamente, o runner recusa
-a execução; use outro binário de teste sem cURL. Ele não tenta instalar nada.
-Nunca remova essa recusa para executar a suíte com HTTP real.
+`php-isolated.sh` usa `-n` e desabilita todas as funções nativas das extensões
+cURL e sockets via `disable_functions` antes de compilar/carregar os fakes.
+Também bloqueia streams de URL, conexões por streams e subprocessos. PHP 8 permite
+redefinir em userland as funções internas desabilitadas. `run.php` verifica o
+isolamento antes de carregar os fakes; nunca há fallback para cURL real.
+
+Para lint, use o mesmo executor (não execute `fakes.php` como programa):
+
+```sh
+for file in tests/*.php; do
+    sh tests/php-isolated.sh -l "$file" || exit
+done
+sh -n tests/php-isolated.sh
+```
+
+As declarações falsas são condicionais a uma guarda explícita, evitando colisão
+na compilação isolada. Sem a guarda, carregar os fakes falha. Nenhuma função nativa
+é reutilizada. Constantes cURL já definidas são preservadas; isso não executa HTTP.
+No Docker, use imagem local com `--pull=never --network none --read-only` e monte
+este repositório em `/work` somente para leitura; execute os comandos em `/work`.
 
 ## Estrutura
 
@@ -49,6 +65,8 @@ fallback de rede. Esta suíte não valida as demais regras de negócio do módul
 
 ## Estado da execução nesta entrega
 
-Não executada: o ambiente não disponibiliza PHP no PATH/caminhos usuais e o socket
-Docker negou acesso à consulta de imagens locais. Também não foi possível executar
-lint PHP. Revisão estática realizada; execução em PHP 8.1.34 continua pendente.
+Executada na imagem local `php:8.1-cli`, PHP 8.1.34: lint dos dois arquivos PHP
+aprovado; 47 cenários executados, 47 aprovados, 0 reprovados. Contêiner sem rede,
+somente leitura, sem capabilities e com repositório montado somente para leitura.
+Nenhuma dependência instalada, imagem baixada ou arquivo produtivo modificado.
+A correção anterior de SSO com `JSON_UNESCAPED_SLASHES` foi preservada.
