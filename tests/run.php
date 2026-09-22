@@ -21,12 +21,15 @@ require __DIR__ . '/fakes.php';
 define('WHMCS', true);
 require __DIR__ . '/../modules/servers/enhance/EnhanceApi.php';
 require __DIR__ . '/../modules/addons/enhance_importer/enhance_importer.php';
+require __DIR__ . '/../modules/servers/enhance/enhance.php';
 
 const PASSWORD = 'SENTINEL_PASSWORD_9f3a';
 const API_KEY = 'SENTINEL_API_TOKEN_7b2c';
 const AUTH = 'Bearer SENTINEL_AUTH_4d8e';
 const SSO = 'https://example.invalid/sso/SENTINEL_SSO_f1a6';
 const EMAIL = 'sentinel-user@example.invalid';
+const BODY_SENTINEL = 'SENTINEL_BODY_815d';
+const ERROR_SENTINEL = 'SENTINEL_ERROR_e39a';
 
 function check(bool $condition, string $label): void {
     if (!$condition) { throw new RuntimeException($label); }
@@ -38,9 +41,20 @@ function secrets(): array {
 }
 function assertSafe($value): void {
     $encoded = json_encode($value, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
-    foreach (secrets() as $secret) {
+    foreach (array_merge(secrets(), [BODY_SENTINEL, ERROR_SENTINEL]) as $secret) {
         check(!str_contains($encoded, $secret), 'Sentinel leaked to a persistence/output candidate');
     }
+}
+function expectFailure(callable $call, string $category, int $httpCode): EnhanceTransportException {
+    try { $call(); } catch (EnhanceTransportException $e) {
+        check($e->category === $category && $e->httpCode === $httpCode, 'Incorrect failure classification');
+        check($e->getMessage() === 'Enhance request failed (' . $category . ').', 'Non-generic exception message');
+        check($e->getPrevious() === null, 'Unsafe previous exception');
+        assertSafe([$e->getMessage(), $e->category, $e->format, $e->httpCode, $e->curlCode]);
+        assertSafe([serialize($e), (string) $e, $e->__debugInfo()]);
+        return $e;
+    }
+    throw new RuntimeException('Expected safe failure, got success');
 }
 function api(bool $debug): EnhanceApi {
     // Skip constructor schema/email side effects; no WHMCS or real DB is needed.
@@ -49,6 +63,7 @@ function api(bool $debug): EnhanceApi {
     foreach (['host' => 'example.invalid', 'masterOrgId' => 'fake-master', 'apiKey' => API_KEY] as $name => $value) {
         $reflection->getProperty($name)->setValue($api, $value);
     }
+    $api->clientOrgFieldId = 1;
     $api->debug = $debug;
     return $api;
 }
@@ -109,8 +124,8 @@ foreach ([false, true] as $debug) {
     }
     $tests['nested request and JSON response / ' . $suffix] = static function () use ($debug): void {
         reply(json_encode(payload()));
-        $result = api($debug)->send('POST', '/logins', payload());
-        check($result === payload() + ['_httpCode' => 200], 'Nested response changed');
+        $failure = expectFailure(static fn() => api($debug)->send('POST', '/logins', payload()), 'invalid_schema', 200);
+        check($failure->format === 'json', 'Valid JSON must remain distinguished from invalid operation schema');
         check(json_decode(request()[CURLOPT_POSTFIELDS], true) === payload(), 'Nested body changed');
         foreach (secrets() as $secret) {
             if (in_array($secret, ['SENTINEL_AUTH_4d8e', 'SENTINEL_SSO_f1a6'], true)) { continue; }
@@ -122,23 +137,24 @@ foreach ([false, true] as $debug) {
             $tests['HTTP ' . $status . ($json ? ' JSON / ' : ' raw / ') . $suffix] = static function () use ($debug, $status, $json): void {
                 $raw = $json ? json_encode(payload()) : implode(' ', secrets());
                 reply($raw, $status);
-                $result = api($debug)->send('GET', '/orgs/fake-org');
-                check($result['_httpCode'] === $status, 'HTTP code changed');
-                if ($json) {
-                    check($result['password'] === PASSWORD && $result['authorization'] === AUTH, 'Error/success JSON altered');
-                } else {
-                    check($result[$status >= 400 ? 'message' : '_raw'] === $raw, 'Raw response altered');
-                }
-                if ($status >= 400) { check($result['code'] === 'http_' . $status, 'HTTP error contract changed'); }
-                check(lastLog()['output'][3]['result'] === ($status >= 400 ? 'http_error' : 'http_response'), 'Wrong generic HTTP category');
+                $category = match ($status) {
+                    200 => $json ? 'invalid_schema' : 'non_json',
+                    400 => 'validation_error',
+                    401, 403 => 'auth_error',
+                    429 => 'rate_limited',
+                    500 => 'remote_error',
+                };
+                $failure = expectFailure(static fn() => api($debug)->send('GET', '/orgs/fake-org'), $category, $status);
+                check($failure->format === ($status === 200 ? ($json ? 'json' : 'non_json') : 'unavailable'), 'Wrong response format');
+                check(lastLog()['output'][3]['result'] === $category, 'Wrong safe HTTP category');
             };
         }
     }
     $tests['cURL error / ' . $suffix] = static function () use ($debug): void {
         $error = implode(' ', secrets());
         reply(false, 0, $error, 28);
-        $result = api($debug)->send('GET', '/licence');
-        check($result === ['code' => 'curl_error', 'message' => $error, '_httpCode' => 0], 'cURL return changed');
+        $failure = expectFailure(static fn() => api($debug)->send('GET', '/licence'), 'transport_error', 0);
+        check($failure->curlCode === 28, 'Numeric cURL error not propagated safely');
         check(lastLog()['output'][3]['curl_code'] === 28, 'Numeric cURL error missing');
         check(lastLog()['output'][3]['result'] === 'transport_error', 'Wrong transport category');
     };
@@ -206,6 +222,9 @@ $tests['no production file/debug or alternative logging sinks'] = static functio
         }
     }
 };
+
+require __DIR__ . '/transport.php';
+require __DIR__ . '/review-regressions.php';
 
 $before = fingerprints();
 $passed = 0;

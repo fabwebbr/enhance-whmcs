@@ -9,6 +9,7 @@
 
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/EnhanceLog.php';
+require_once __DIR__ . '/EnhanceHttpResult.php';
 
 use WHMCS\Database\Capsule;
 
@@ -99,55 +100,64 @@ class EnhanceApi
     {
         $url = "https://{$this->host}/api{$path}";
 
-        $ch = curl_init();
-        curl_setopt_array($ch, [
-            CURLOPT_URL            => $url,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_CUSTOMREQUEST  => $method,
-            CURLOPT_HTTPHEADER     => [
-                'Accept: application/json, text/plain, */*',
-                'Content-Type: application/json',
-                "Authorization: Bearer {$this->apiKey}",
-            ],
-            CURLOPT_TIMEOUT        => 45,
-            CURLOPT_SSL_VERIFYHOST => 2,
-            CURLOPT_SSL_VERIFYPEER => true,
-        ]);
-
+        $result = null;
+        $httpCode = 0;
+        $curlCode = 0;
+        $duration = 0.0;
+        $ch = false;
+        $encodedBody = null;
         if (in_array($method, ['POST', 'PUT', 'PATCH', 'DELETE'], true) && !empty($body)) {
-            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($body));
+            try {
+                $encodedBody = json_encode($body);
+            } catch (Throwable $e) {
+                $encodedBody = false;
+            }
+            if ($encodedBody === false) {
+                $result = EnhanceHttpResult::failure('request_encoding_error');
+            }
         }
 
-        $raw      = curl_exec($ch);
-        $curlErr  = curl_error($ch);
-        $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $curlCode = curl_errno($ch);
-        $duration = (float) curl_getinfo($ch, CURLINFO_TOTAL_TIME);
-        curl_close($ch);
+        if ($result === null) {
+            try {
+                $ch = curl_init();
+                if ($ch === false) throw new RuntimeException('Transport initialization failed.');
+                $configured = curl_setopt_array($ch, [
+                    CURLOPT_URL            => $url,
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_CUSTOMREQUEST  => $method,
+                    CURLOPT_HTTPHEADER     => [
+                        'Accept: application/json, text/plain, */*',
+                        'Content-Type: application/json',
+                        "Authorization: Bearer {$this->apiKey}",
+                    ],
+                    CURLOPT_TIMEOUT        => 45,
+                    CURLOPT_SSL_VERIFYHOST => 2,
+                    CURLOPT_SSL_VERIFYPEER => true,
+                ]);
+                if (!$configured || ($encodedBody !== null && !curl_setopt($ch, CURLOPT_POSTFIELDS, $encodedBody))) {
+                    throw new RuntimeException('Transport configuration failed.');
+                }
+                $raw = curl_exec($ch);
+                $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                $curlCode = curl_errno($ch);
+                $duration = (float) curl_getinfo($ch, CURLINFO_TOTAL_TIME);
+                $result = EnhanceHttpResult::classify($raw, $httpCode, $curlCode, EnhanceHttpResult::contract($method, $path));
+            } catch (Throwable $e) {
+                // Never propagate native error text, URL, body or a previous exception.
+                $result = EnhanceHttpResult::failure('transport_error', $httpCode, $curlCode);
+            } finally {
+                if ($ch !== false) curl_close($ch);
+            }
+        }
 
         $metadata = EnhanceLog::metadata($method, $path, $httpCode, $curlCode, $duration, $this->debug);
+        $metadata['result'] = $result->category;
         logModuleCall('enhance', $metadata['method'] . ' ' . $metadata['endpoint'],
             ['method' => $metadata['method'], 'endpoint' => $metadata['endpoint']],
             $metadata, [], EnhanceLog::replacements($this->apiKey, $body));
 
-        if ($curlErr) {
-            return ['code' => 'curl_error', 'message' => $curlErr, '_httpCode' => $httpCode];
-        }
-
-        $decoded = json_decode((string) $raw, true);
-        if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
-            if ($httpCode >= 400 && empty($decoded['code'])) {
-                $decoded['code'] = 'http_' . $httpCode;
-            }
-            $decoded['_httpCode'] = $httpCode;
-            return $decoded;
-        }
-
-        if ($httpCode >= 400) {
-            return ['code' => 'http_' . $httpCode, 'message' => trim((string) $raw), '_httpCode' => $httpCode];
-        }
-
-        return ['_raw' => trim((string) $raw), '_httpCode' => $httpCode];
+        // Throw before business consumers can interpret a failure as absence.
+        return $result->data();
     }
 
     // -------------------------------------------------------------------------

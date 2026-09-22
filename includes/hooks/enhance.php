@@ -40,117 +40,121 @@ add_hook('ClientEdit', 1, function (array $vars): void {
 });
 add_hook('AdminClientProfileTabFields', 1, function (array $vars): array {
 
-    // Resolve the first active Enhance server
-    // PT: Encontrar o primeiro servidor Enhance activo
-    $server = Capsule::table('tblservers')
-        ->where('type', 'enhance')
-        ->where('disabled', '0')
-        ->select('hostname', 'username', 'accesshash')
-        ->first();
+    $enhanceActionPending = false;
+    try {
+        // Resolve the first active Enhance server
+        // PT: Encontrar o primeiro servidor Enhance activo
+        $server = Capsule::table('tblservers')
+            ->where('type', 'enhance')
+            ->where('disabled', '0')
+            ->select('hostname', 'username', 'accesshash')
+            ->first();
 
-    if (!$server) return [];
+        if (!$server) return [];
 
-    $api    = new EnhanceApi($server->hostname, $server->username, $server->accesshash);
-    $userId = (int) $vars['userid'];
-    $orgId  = $api->getClientOrgId($userId);
+        $api    = new EnhanceApi($server->hostname, $server->username, $server->accesshash);
+        $userId = (int) $vars['userid'];
+        $orgId  = $api->getClientOrgId($userId);
 
-    // -------------------------------------------------------------------------
-    // Handle POST actions (CSRF-protected)
-    // -------------------------------------------------------------------------
+        // -------------------------------------------------------------------------
+        // Handle POST actions (CSRF-protected)
+        // -------------------------------------------------------------------------
 
-    $feedback = '';
+        $feedback = '';
 
-    if (!empty($_POST['enhance_action'])) {
-        if (empty($_POST['token']) || !check_token('CSRF_enhance_' . $userId, $_POST['token'])) {
-            $feedback = _ehAlert('danger', 'Invalid security token.');
-        } else {
-            $action    = $_POST['enhance_action'];
-            $postOrgId = $_POST['orgId'] ?? $orgId;
+        if (!empty($_POST['enhance_action'])) {
+            if (empty($_POST['token']) || !check_token('CSRF_enhance_' . $userId, $_POST['token'])) {
+                $feedback = _ehAlert('danger', 'Invalid security token.');
+            } else {
+                $action    = $_POST['enhance_action'];
+                $postOrgId = $_POST['orgId'] ?? $orgId;
 
-            switch ($action) {
-                case 'linkOrg':
-                    $newOrgId = trim($_POST['newOrgId'] ?? '');
-                    if ($newOrgId !== '') {
-                        Capsule::table('tblcustomfieldsvalues')
-                            ->where(['fieldid' => $api->clientOrgFieldId, 'relid' => $userId])
-                            ->delete();
-                        Capsule::table('tblcustomfieldsvalues')
-                            ->insert(['fieldid' => $api->clientOrgFieldId, 'relid' => $userId, 'value' => $newOrgId]);
-                        $orgId    = $newOrgId;
-                        $feedback = _ehAlert('success', 'Organisation linked.')
-                                  . '<meta http-equiv="refresh" content="2">';
-                    }
-                    break;
+                $enhanceActionPending = true;
+                switch ($action) {
+                    case 'linkOrg':
+                        $newOrgId = trim($_POST['newOrgId'] ?? '');
+                        if ($newOrgId !== '') {
+                            Capsule::table('tblcustomfieldsvalues')
+                                ->where(['fieldid' => $api->clientOrgFieldId, 'relid' => $userId])
+                                ->delete();
+                            Capsule::table('tblcustomfieldsvalues')
+                                ->insert(['fieldid' => $api->clientOrgFieldId, 'relid' => $userId, 'value' => $newOrgId]);
+                            $orgId    = $newOrgId;
+                            $feedback = _ehAlert('success', 'Organisation linked.')
+                                      . '<meta http-equiv="refresh" content="2">';
+                        }
+                        break;
 
-                case 'resetPassword':
-                    $orgInfo = $api->getOrg($postOrgId);
-                    $email   = $orgInfo['ownerEmail'] ?? '';
-                    $resp    = $email ? $api->triggerPasswordRecovery($email) : ['code' => 'no_email'];
-                    $feedback = empty($resp['code'])
-                        ? _ehAlert('success', 'Password reset email sent.')
-                        : _ehAlert('danger', 'Error: ' . ($resp['message'] ?? $resp['code']));
-                    break;
+                    case 'resetPassword':
+                        $orgInfo = $api->getOrg($postOrgId);
+                        $email   = $orgInfo['ownerEmail'] ?? '';
+                        $resp    = $email ? $api->triggerPasswordRecovery($email) : ['code' => 'no_email'];
+                        $feedback = empty($resp['code'])
+                            ? _ehAlert('success', 'Password reset email sent.')
+                            : _ehAlert('danger', 'Error: ' . ($resp['message'] ?? $resp['code']));
+                        break;
 
-                case 'suspendOrg':
-                    $resp     = $api->setOrgSuspended($postOrgId, true);
-                    $feedback = empty($resp['code'])
-                        ? _ehAlert('success', 'Organisation suspended.')
-                              . '<meta http-equiv="refresh" content="2">'
-                        : _ehAlert('danger', 'Error: ' . ($resp['message'] ?? $resp['code']));
-                    break;
+                    case 'suspendOrg':
+                        $resp     = $api->setOrgSuspended($postOrgId, true);
+                        $feedback = empty($resp['code'])
+                            ? _ehAlert('success', 'Organisation suspended.')
+                                  . '<meta http-equiv="refresh" content="2">'
+                            : _ehAlert('danger', 'Error: ' . ($resp['message'] ?? $resp['code']));
+                        break;
 
-                case 'reactivateOrg':
-                    $resp     = $api->setOrgSuspended($postOrgId, false);
-                    $feedback = empty($resp['code'])
-                        ? _ehAlert('success', 'Organisation reactivated.')
-                              . '<meta http-equiv="refresh" content="2">'
-                        : _ehAlert('danger', 'Error: ' . ($resp['message'] ?? $resp['code']));
-                    break;
+                    case 'reactivateOrg':
+                        $resp     = $api->setOrgSuspended($postOrgId, false);
+                        $feedback = empty($resp['code'])
+                            ? _ehAlert('success', 'Organisation reactivated.')
+                                  . '<meta http-equiv="refresh" content="2">'
+                            : _ehAlert('danger', 'Error: ' . ($resp['message'] ?? $resp['code']));
+                        break;
 
-                case 'deleteOrg':
-                    $resp = $api->deleteOrg($postOrgId);
-                    if (empty($resp['code'])) {
-                        Capsule::table('tblcustomfieldsvalues')
-                            ->where(['fieldid' => $api->clientOrgFieldId, 'relid' => $userId])
-                            ->delete();
-                        $orgId    = null;
-                        $feedback = _ehAlert('success', 'Organisation deleted.')
-                                  . '<meta http-equiv="refresh" content="2">';
-                    } else {
-                        $feedback = _ehAlert('danger', 'Error: ' . ($resp['message'] ?? $resp['code']));
-                    }
-                    break;
+                    case 'deleteOrg':
+                        $resp = $api->deleteOrg($postOrgId);
+                        if (empty($resp['code'])) {
+                            Capsule::table('tblcustomfieldsvalues')
+                                ->where(['fieldid' => $api->clientOrgFieldId, 'relid' => $userId])
+                                ->delete();
+                            $orgId    = null;
+                            $feedback = _ehAlert('success', 'Organisation deleted.')
+                                      . '<meta http-equiv="refresh" content="2">';
+                        } else {
+                            $feedback = _ehAlert('danger', 'Error: ' . ($resp['message'] ?? $resp['code']));
+                        }
+                        break;
+                }
             }
         }
-    }
 
-    // -------------------------------------------------------------------------
-    // Build UI
-    // -------------------------------------------------------------------------
+        // -------------------------------------------------------------------------
+        // Build UI
+        // -------------------------------------------------------------------------
 
-    $token    = generate_token('plain');
-    $fieldKey = 'customfield' . $api->clientOrgFieldId;
-    $content  = $feedback;
+        $enhanceActionPending = false;
+        $token    = generate_token('plain');
+        $fieldKey = 'customfield' . $api->clientOrgFieldId;
+        $content  = $feedback;
 
-    if ($orgId) {
+        if ($orgId) {
 
-        $orgInfo   = $api->getOrg($orgId);
-        $emailInfo = $api->getEmails($orgId);
+            $orgInfo   = $api->getOrg($orgId);
+            $emailInfo = $api->getEmails($orgId);
 
-        if (isset($orgInfo['id'])) {
+            if (isset($orgInfo['id'])) {
 
-            $suspended   = !empty($orgInfo['suspendedBy']);
-            $statusLabel = $suspended ? 'Suspended' : ucfirst($orgInfo['status'] ?? 'active');
-            $subCount    = (int) ($orgInfo['subscriptionsCount'] ?? 0);
-            $siteCount   = (int) ($orgInfo['websitesCount']      ?? 0);
-            $emailCount  = (int) ($emailInfo['total']            ?? 0);
+                $suspended   = !empty($orgInfo['suspendedBy']);
+                $statusLabel = $suspended ? 'Suspended' : ucfirst($orgInfo['status'] ?? 'active');
+                $subCount    = (int) ($orgInfo['subscriptionsCount'] ?? 0);
+                $siteCount   = (int) ($orgInfo['websitesCount']      ?? 0);
+                $emailCount  = (int) ($emailInfo['total']            ?? 0);
 
-            $badges = _ehBadge('status-badge-green',  'fa-thermometer-empty', $statusLabel, 'Status')
-                    . _ehBadge('status-badge-orange', 'fa-users',   $subCount,   'Subscriptions')
-                    . _ehBadge('status-badge-pink',   'fa-globe',   $siteCount,  'Websites')
-                    . _ehBadge('status-badge-cyan',   'fa-envelope',$emailCount, 'Emails');
+                $badges = _ehBadge('status-badge-green',  'fa-thermometer-empty', $statusLabel, 'Status')
+                        . _ehBadge('status-badge-orange', 'fa-users',   $subCount,   'Subscriptions')
+                        . _ehBadge('status-badge-pink',   'fa-globe',   $siteCount,  'Websites')
+                        . _ehBadge('status-badge-cyan',   'fa-envelope',$emailCount, 'Emails');
 
-            $content .= <<<HTML
+                $content .= <<<HTML
 <div style="background:#372c62;padding:10px 16px;border-radius:6px;margin-bottom:12px;">
     <img width="130" src="https://community.enhance.com/assets/logo-uf00slfz.png" alt="Enhance">
 </div>
@@ -158,34 +162,34 @@ add_hook('AdminClientProfileTabFields', 1, function (array $vars): array {
     {$badges}
 </div>
 HTML;
-            // Action buttons
-            $content .= '<div style="display:flex;flex-wrap:wrap;gap:8px;">';
-            if ($suspended) {
-                $content .= _ehBtn($userId, $orgId, 'reactivateOrg', 'btn-success', 'Reactivate / Reactivar', $token);
+                // Action buttons
+                $content .= '<div style="display:flex;flex-wrap:wrap;gap:8px;">';
+                if ($suspended) {
+                    $content .= _ehBtn($userId, $orgId, 'reactivateOrg', 'btn-success', 'Reactivate / Reactivar', $token);
+                } else {
+                    $content .= _ehBtn($userId, $orgId, 'suspendOrg', 'btn-warning', 'Suspend / Suspender', $token);
+                }
+                $content .= _ehBtn($userId, $orgId, 'resetPassword', 'btn-primary', 'Reset Password / Repor Senha', $token);
+                $content .= _ehBtn($userId, $orgId, 'deleteOrg',    'btn-danger',  'Delete Org / Eliminar Org',    $token, true);
+                $content .= '</div>';
+
             } else {
-                $content .= _ehBtn($userId, $orgId, 'suspendOrg', 'btn-warning', 'Suspend / Suspender', $token);
+                $content .= _ehAlert('warning', "Could not load org {$orgId}.");
             }
-            $content .= _ehBtn($userId, $orgId, 'resetPassword', 'btn-primary', 'Reset Password / Repor Senha', $token);
-            $content .= _ehBtn($userId, $orgId, 'deleteOrg',    'btn-danger',  'Delete Org / Eliminar Org',    $token, true);
-            $content .= '</div>';
 
         } else {
-            $content .= _ehAlert('warning', "Could not load org {$orgId}.");
-        }
 
-    } else {
+            // No org yet — show link form
+            $customers = $api->getCustomers();
+            $options   = '<option value="">— Select —</option>';
+            foreach ($customers['items'] ?? [] as $c) {
+                $cid   = htmlspecialchars($c['id'],            ENT_QUOTES);
+                $cname = htmlspecialchars($c['name'],          ENT_QUOTES);
+                $cemail= htmlspecialchars($c['ownerEmail'] ?? '', ENT_QUOTES);
+                $options .= "<option value=\"{$cid}\">{$cname} — {$cemail}</option>";
+            }
 
-        // No org yet — show link form
-        $customers = $api->getCustomers();
-        $options   = '<option value="">— Select —</option>';
-        foreach ($customers['items'] ?? [] as $c) {
-            $cid   = htmlspecialchars($c['id'],            ENT_QUOTES);
-            $cname = htmlspecialchars($c['name'],          ENT_QUOTES);
-            $cemail= htmlspecialchars($c['ownerEmail'] ?? '', ENT_QUOTES);
-            $options .= "<option value=\"{$cid}\">{$cname} — {$cemail}</option>";
-        }
-
-        $content .= <<<HTML
+            $content .= <<<HTML
 <form method="POST" style="margin-top:8px;">
     <input type="hidden" name="enhance_action" value="linkOrg">
     <input type="hidden" name="token" value="{$token}">
@@ -196,12 +200,12 @@ HTML;
     </div>
 </form>
 HTML;
-    }
+        }
 
-    $contentJson = json_encode($content);
+        $contentJson = json_encode($content);
 
-    return [
-        '' => <<<JS
+        return [
+            '' => <<<JS
 <script>
 document.addEventListener("DOMContentLoaded", function () {
     var field = document.getElementById("{$fieldKey}");
@@ -220,7 +224,14 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 </script>
 JS,
-    ];
+        ];
+    } catch (EnhanceTransportException $e) {
+        // Do not retry or render more remote data after an unconfirmed result.
+        $message = $enhanceActionPending
+            ? 'The Enhance operation could not be confirmed. Check its state before trying again.'
+            : 'The Enhance query could not be confirmed. Profile data is temporarily unavailable.';
+        return ['Enhance' => _ehAlert('danger', $message)];
+    }
 });
 
 // =============================================================================

@@ -30,7 +30,7 @@ este repositório em `/work` somente para leitura; execute os comandos em `/work
 
 ## Estrutura
 
-- `run.php`: 47 cenários, com sentinelas fictícias, executando os métodos reais de
+- `run.php`: 47 cenários originais, com sentinelas fictícias, executando os métodos reais de
   transporte, login, recuperação e SSO, além das funções que persistem snapshots.
 - `fakes.php`: funções cURL em memória, fila obrigatória de respostas, captura dos
   argumentos do logger e implementação mínima de banco para os snapshots.
@@ -63,10 +63,19 @@ Nenhuma sentinela é uma credencial real. Falhas imprimem o nome do cenário, se
 valores nem mensagens potencialmente sensíveis. A fila cURL vazia causa falha, sem
 fallback de rede. Esta suíte não valida as demais regras de negócio do módulo.
 
+## Fase 1B
+
+`transport.php` acrescenta 109 cenários: total **156**, sem excluir os 47 originais.
+As expectativas incompatíveis com segurança foram atualizadas conforme o
+[registro prévio e inventário de consumidores](../docs/transport-phase-1b.md).
+Exceções, serialização, mensagens e logs são verificados contra sentinelas.
+Os cinco consumidores autorizados são executados com falhas falsas para comprovar
+que não há descoberta, exclusão de vínculo ou compensação após erro.
+
 ## Estado da execução nesta entrega
 
-Executada na imagem local `php:8.1-cli`, PHP 8.1.34: lint dos dois arquivos PHP
-aprovado; 47 cenários executados, 47 aprovados, 0 reprovados. Contêiner sem rede,
+Executada na imagem local `php:8.1-cli`, PHP 8.1.34: lint dos cinco arquivos PHP alterados/criados
+aprovado; 156 cenários executados, 156 aprovados, 0 reprovados. Contêiner sem rede,
 somente leitura, sem capabilities e com repositório montado somente para leitura.
-Nenhuma dependência instalada, imagem baixada ou arquivo produtivo modificado.
+Nenhuma dependência instalada ou imagem baixada. A Fase 1B altera somente o transporte produtivo e sua classificação.
 A correção anterior de SSO com `JSON_UNESCAPED_SLASHES` foi preservada.

@@ -31,36 +31,36 @@ Não é necessário Composer para executar os testes desta entrega.
   funcional permanecem inalterados. O código atual não lê esses snapshots para
   provisionar, importar ou sincronizar.
 
-Os únicos ajustes nos hooks e no importador são nesses destinos de logging.
-Corpos enviados, respostas devolvidas (inclusive mensagens de erro e URLs de SSO),
-endpoints e assinaturas públicas permanecem preservados. Nenhuma lógica de cron,
-associação, importação, provisionamento ou envio de senha por e-mail foi corrigida.
+Os únicos ajustes nos hooks e no importador da Fase 1A são nesses destinos de
+logging. A Fase 1B acrescenta validação de transporte e interrupção por exceção
+sanitizada, sem alterar os corpos dos consumidores. Consulte o
+[relatório da Fase 1B](docs/transport-phase-1b.md) para contratos provisórios,
+mudanças de compatibilidade e inventário dos consumidores.
 
 ### Testes isolados em PHP 8.1
 
 Consulte [tests/README.md](tests/README.md). Com PHP 8.1 disponível:
 
 ```sh
-php -n tests/run.php
+sh tests/php-isolated.sh tests/run.php
 ```
 
-Sem dependências de produção/teste adicionais, Composer, WHMCS, banco real ou API
-Enhance. O runner recusa cURL nativo e usa funções falsas; não realiza conexões.
+Sem dependências adicionais, Composer, WHMCS, banco real ou API Enhance. O executor
+desabilita cURL/sockets nativos e usa funções falsas. A validação foi executada em
+PHP 8.1.34 no Docker local, sem rede, com repositório somente leitura: **156 testes
+aprovados, 0 reprovados** (47 cenários originais preservados e 109 novos).
 
 ### Limitações e validação desta entrega
 
-Na implementação, PHP não foi encontrado no PATH nem nos caminhos locais usuais;
-`php -n tests/run.php` falhou com `command not found`. O cliente Docker existe, mas
-a consulta de imagens locais foi negada pelo acesso ao socket. Os testes e o lint
-PHP **não foram executados**. Nenhuma imagem/pacote foi baixado ou instalado.
-A revisão estática e `git diff --check` não substituem a execução em PHP 8.1.
+**Não homologado para produção.** Contratos positivos de licença, PATCH, DELETE e
+vínculo Owner não estão demonstrados no repositório e retornam estado indeterminado.
+Somente o 204 de recuperação de senha é aceito sem corpo. Nenhum endpoint produtivo
+trata 404 como ausência. Verifique os impactos no relatório antes de implantação.
 
-Logs/snapshots históricos não são apagados por esta entrega. Sua eventual limpeza
-precisa ser planejada separadamente. O WHMCS, outros hooks, ferramentas de tracing
-e logs do runtime podem registrar dados fora destes destinos; a resposta funcional
-continua completa para os chamadores. O histórico de e-mail e o fluxo de senha
-inicial permanecem fora do escopo. A integração real com o Module Log deve ser
-homologada com dados fictícios antes de produção.
+Logs/snapshots históricos não são apagados. O envio de senha inicial por e-mail e
+sua eventual retenção no WHMCS permanecem fora do escopo. A Fase 1B não devolve
+payloads de erro como mensagens públicas; payloads de sucesso continuam disponíveis
+internamente. Logging independente do WHMCS/runtime exige homologação separada.
 
 Para reversão futura, restaurar os arquivos modificados desta entrega e remover
 `EnhanceLog.php` somente junto da reversão de seus consumidores. Não há migração de

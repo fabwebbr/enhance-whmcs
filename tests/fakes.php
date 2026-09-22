@@ -5,6 +5,7 @@ namespace WHMCS\Database {
     {
         public static array $writes = [];
         public static bool $exists = false;
+        public static array $values = [];
         public static function table($name) { return new Query($name); }
         public static function schema() { return new class {
             public function hasTable($name) { return true; }
@@ -14,7 +15,15 @@ namespace WHMCS\Database {
     {
         public function __construct(private string $table) {}
         public function where(...$args) { return $this; }
+        public function select(...$args) { return $this; }
+        public function first() { return $this->value('first'); }
         public function exists() { return Capsule::$exists; }
+        public function value($column) {
+            $key = $this->table . ':' . $column;
+            if (empty(Capsule::$values[$key])) { throw new \RuntimeException('Unexpected database read'); }
+            return array_shift(Capsule::$values[$key]);
+        }
+        public function delete() { Capsule::$writes[] = [$this->table, 'delete', []]; }
         public function insert($data) { Capsule::$writes[] = [$this->table, 'insert', $data]; }
         public function update($data) { Capsule::$writes[] = [$this->table, 'update', $data]; }
     }
@@ -34,6 +43,7 @@ namespace {
     $GLOBALS['requests'] = [];
     $GLOBALS['moduleLogs'] = [];
     $GLOBALS['activityLogs'] = [];
+    $GLOBALS['httpAttempts'] = 0;
 
     // Conditional declaration avoids collisions during standalone PHP lint.
     // This is NOT a fallback: the guard above throws if isolation is absent.
@@ -42,6 +52,7 @@ namespace {
     function curl_setopt_array($ch, $options) { $ch->options = $options; return true; }
     function curl_setopt($ch, $option, $value) { $ch->options[$option] = $value; return true; }
     function curl_exec($ch) {
+        $GLOBALS['httpAttempts']++;
         if (!$GLOBALS['httpQueue']) { throw new \RuntimeException('Unexpected HTTP call; no fake response queued'); }
         $ch->reply = array_shift($GLOBALS['httpQueue']);
         $GLOBALS['requests'][] = $ch->options;
@@ -60,6 +71,9 @@ namespace {
             'replace' => $replace,
         ];
     }
+    function add_hook($name, $priority, $callback) { $GLOBALS['hooks'][$name] = $callback; }
+    function check_token(...$args) { return true; }
+    function generate_token(...$args) { return 'fake-csrf'; }
     function logActivity($message) { $GLOBALS['activityLogs'][] = $message; }
     function localAPI(...$args) { throw new \RuntimeException('Unexpected WHMCS API call'); }
     }
