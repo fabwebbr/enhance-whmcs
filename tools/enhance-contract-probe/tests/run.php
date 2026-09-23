@@ -227,6 +227,7 @@ $tests['CLI never signals success for locally blocked creation'] = function () {
     check($exit === 3 && $report['session_state'] === 'indeterminate'); safe($report);
 };
 require __DIR__ . '/p1-regressions.php';
+require __DIR__ . '/preflight-regressions.php';
 $passed = 0;
 try {
     foreach ($tests as $name => $test) {

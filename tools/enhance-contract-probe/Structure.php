@@ -41,6 +41,7 @@ final class Structure
     }
     public static function report(string $operation, Response $response, string $correlation): array
     {
+        if (!$response->trusted) throw new Refusal('untrusted_peer');
         [$method, $path] = Catalog::get($operation);
         $raw = $response->body();
         $value = json_decode($raw, false, 64);

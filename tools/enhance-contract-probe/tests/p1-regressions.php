@@ -77,7 +77,9 @@ foreach (['unknown-key', 'config-include', 'missing-key', 'wrong-type'] as $case
         [$p, $f, $c, $e] = setupProbe();
         if ($case === 'unknown-key') $c['api_key'] = SECRET;
         if ($case === 'config-include') $c['include'] = 'p1custom://ignored';
-        if ($case === 'missing-key') unset($c['plan_b']);
+        // plan_b is no longer required by licence; retain rejection coverage
+        // using a field required by every read-only configuration.
+        if ($case === 'missing-key') unset($c['pinned_ip']);
         if ($case === 'wrong-type') $c['tls_verify'] = 'true';
         $file = $c['session_directory'] . '/config.json'; file_put_contents($file, json_encode($c));
         [$exit, $r] = Cli::run(['--execute', '--config', $file], $e, $f, fn() => '');

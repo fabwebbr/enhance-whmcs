@@ -5,7 +5,7 @@ require_once __DIR__ . '/Refusal.php';
 final class LocalConfig
 {
     public const MAX_BYTES = 65536;
-    public static function load(string $path): array
+    public static function load(string $path, ?string $operation = null): array
     {
         // Lexical check precedes EVERY filesystem operation on user input. No URI,
         // percent escapes, backslashes, whitespace, controls or Unicode normalization.
@@ -32,7 +32,7 @@ final class LocalConfig
             self::same($before, self::inspect($absolute));
             $value = json_decode($json, true, 32, JSON_THROW_ON_ERROR);
             if (!is_array($value)) throw new Refusal('invalid_config');
-            self::validate($value);
+            self::validate($value, $operation);
             return $value;
         } finally {
             if (is_resource($handle)) fclose($handle);
@@ -65,16 +65,23 @@ final class LocalConfig
             if ($before[$key] !== $after[$key]) throw new Refusal('config_changed');
         }
     }
-    public static function validate(array $config): void
+    public static function validate(array $config, ?string $operation = null): void
     {
         $keys = ['environment', 'host', 'pinned_ip', 'tls_verify', 'blocked_hosts', 'blocked_ips',
             'master_org', 'plan_a', 'plan_b', 'session_directory'];
-        if (array_diff($keys, array_keys($config)) || array_diff(array_keys($config), $keys)) throw new Refusal('invalid_config_fields');
+        // Only these root reads may omit session/mutation configuration.
+        $required = $keys;
+        if (in_array($operation, ['licence', 'plans', 'organisations'], true)) {
+            $required = array_diff($keys, ['plan_a', 'plan_b', 'session_directory']);
+            if ($operation === 'licence') $required = array_diff($required, ['master_org']);
+        }
+        if (array_diff($required, array_keys($config)) || array_diff(array_keys($config), $keys)) throw new Refusal('invalid_config_fields');
         foreach (['environment', 'host', 'pinned_ip', 'master_org', 'session_directory'] as $key) {
+            if (!array_key_exists($key, $config)) continue;
             if (!is_string($config[$key]) || $config[$key] === '' || preg_match('/[\x00-\x20\x7f]/', $config[$key])) throw new Refusal('invalid_config_type');
         }
-        if ($config['tls_verify'] !== true || !preg_match('/\A[A-Za-z0-9_-]{1,128}\z/D', $config['master_org'])) throw new Refusal('invalid_config');
-        foreach (['plan_a', 'plan_b'] as $key) if (!is_int($config[$key]) || $config[$key] < 1) throw new Refusal('invalid_config_plan');
+        if ($config['tls_verify'] !== true || (isset($config['master_org']) && !preg_match('/\A[A-Za-z0-9_-]{1,128}\z/D', $config['master_org']))) throw new Refusal('invalid_config');
+        foreach (['plan_a', 'plan_b'] as $key) if (array_key_exists($key, $config) && (!is_int($config[$key]) || $config[$key] < 1)) throw new Refusal('invalid_config_plan');
         foreach (['blocked_hosts', 'blocked_ips'] as $key) {
             if (!is_array($config[$key]) || !array_is_list($config[$key]) || $config[$key] === []) throw new Refusal('blocklist_required');
             foreach ($config[$key] as $entry) if (!is_string($entry) || $entry === '') throw new Refusal('invalid_blocklist');

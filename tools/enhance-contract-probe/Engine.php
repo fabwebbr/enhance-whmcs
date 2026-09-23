@@ -13,9 +13,9 @@ require_once dirname(__DIR__, 2) . '/modules/servers/enhance/EnhanceHttpResult.p
 final class Probe
 {
     public function __construct(private Transport|\Closure $transport) {}
-    public static function target(array $config, array $env): array
+    public static function target(array $config, array $env, ?string $operation = null): array
     {
-        LocalConfig::validate($config);
+        LocalConfig::validate($config, $operation);
         if (($env['ENHANCE_PROBE_ENV'] ?? '') !== 'homologation' || $config['environment'] !== 'homologation') throw new Refusal('homologation_required');
         $host = IpPolicy::hostname($config['host']);
         $ip = IpPolicy::requireGlobal($config['pinned_ip']);
@@ -47,7 +47,7 @@ final class Probe
     {
         [$method, $template, $createdKind] = Catalog::get($operation);
         if (!$execute) return ['mode' => 'dry-run', 'method' => $method, 'route' => Catalog::route($operation), 'requests' => 0];
-        $target = self::target($config, $env);
+        $target = self::target($config, $env, $sessionId === null ? $operation : null);
         $mutation = $method !== 'GET';
         if ($mutation && !$allowMutation) throw new Refusal('mutation_opt_in_required');
         $token = $env['ENHANCE_PROBE_API_KEY'] ?? '';
@@ -59,7 +59,7 @@ final class Probe
             $session->ready();
             if ($createdKind !== null && $session->has($createdKind)) throw new Refusal('resource_already_created');
         }
-        $ids = ['master' => (string) ($config['master_org'] ?? '')];
+        $ids = str_contains($template, '{master}') ? ['master' => (string) ($config['master_org'] ?? '')] : [];
         foreach (['org', 'subscription', 'website'] as $kind) {
             if (str_contains($template, '{' . $kind . '}')) $ids[$kind] = $session?->resource($kind) ?? throw new Refusal('session_resource_required');
         }
@@ -89,6 +89,10 @@ final class Probe
             $response = $transport->request($target, $token, $method, $path, $body);
         }
         catch (\Throwable $e) { $response = new Response('', 0, 2, 0); }
+        if (!$response->trusted) {
+            if ($session !== null) $session->halt($operation, 'untrusted_peer');
+            throw new Refusal('untrusted_peer');
+        }
         $report = Structure::report($operation, $response, bin2hex(random_bytes(16)));
         if ($mutation) {
             $category = $report['phase_1b_category'];
@@ -96,7 +100,7 @@ final class Probe
             if ($createdKind !== null && $category === 'success') {
                 $value = json_decode($response->body(), true);
                 $id = (string) ($value['id'] ?? '');
-                if (!preg_match('/^[a-zA-Z0-9_-]{1,128}$/D', $id) || $id === $ids['master']) { $category = 'invalid_schema'; $id = null; }
+                if (!preg_match('/^[a-zA-Z0-9_-]{1,128}$/D', $id) || $id === ($config['master_org'] ?? null)) { $category = 'invalid_schema'; $id = null; }
             }
             $session->finish($category, $id !== null ? $createdKind : null, $id);
             $report['session_state'] = $category === 'success' ? 'ready' : 'indeterminate';

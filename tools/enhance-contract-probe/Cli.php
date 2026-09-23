@@ -24,11 +24,12 @@ final class Cli
             $operation = $options['--operation'] ?? 'licence';
             Catalog::get($operation);
             if (!isset($options['--execute'])) return [0, $probe->run($operation, [], [])];
-            $config = LocalConfig::load($options['--config'] ?? '');
+            $validationOperation = isset($options['--init-session']) || isset($options['--session']) ? null : $operation;
+            $config = LocalConfig::load($options['--config'] ?? '', $validationOperation);
             if (isset($options['--init-session'])) {
                 return [0, $probe->initialize($config, $env)];
             }
-            Probe::target($config, $env); // Validate environment/destination before confirmation.
+            Probe::target($config, $env, $validationOperation); // Validate environment/destination before confirmation.
             [$method] = Catalog::get($operation);
             $answer = '';
             if ($method !== 'GET' && isset($options['--allow-mutation'], $options['--session'])) {

@@ -2,9 +2,11 @@
 namespace EnhanceProbe;
 if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 
+require_once __DIR__ . '/IpPolicy.php';
+
 final class Response
 {
-    public function __construct(private string $raw, public int $http, public int $errno, public int $durationMs) {}
+    public function __construct(private string $raw, public int $http, public int $errno, public int $durationMs, public bool $trusted = true) {}
     public function body(): string { return $this->raw; }
     public function __debugInfo(): array { return ['http' => $this->http, 'errno' => $this->errno]; }
     public function __serialize(): array { return $this->__debugInfo(); }
@@ -21,7 +23,7 @@ final class CurlTransport implements Transport
         $raw = '';
         try {
             $ch = curl_init();
-            if ($ch === false) return new Response('', 0, 2, 0);
+            if ($ch === false) return new Response('', 0, 2, 0, false);
             $ip = str_contains($target['ip'], ':') ? '[' . $target['ip'] . ']' : $target['ip'];
             $options = [CURLOPT_URL => 'https://' . $target['host'] . '/api' . $path,
                 CURLOPT_CUSTOMREQUEST => $method, CURLOPT_FOLLOWLOCATION => false,
@@ -36,14 +38,24 @@ final class CurlTransport implements Transport
                     return strlen($chunk);
                 }];
             if ($body !== []) $options[CURLOPT_POSTFIELDS] = json_encode($body, JSON_THROW_ON_ERROR);
-            if (!curl_setopt_array($ch, $options)) return new Response('', 0, 2, 0);
+            if (!curl_setopt_array($ch, $options)) return new Response('', 0, 2, 0, false);
             $ok = curl_exec($ch);
+            // Do not inspect or classify any response until its peer is verified.
+            try {
+                $peer = curl_getinfo($ch, CURLINFO_PRIMARY_IP);
+                if (!is_string($peer) || !IpPolicy::same(IpPolicy::requireGlobal($peer), IpPolicy::requireGlobal($target['ip']))) {
+                    throw new Refusal('untrusted_peer');
+                }
+            } catch (\Throwable $e) {
+                $raw = '';
+                return new Response('', 0, 2, 0, false);
+            }
             $errno = curl_errno($ch);
             if ($ok === false && $errno === 0) $errno = 2;
             return new Response($raw, (int) curl_getinfo($ch, CURLINFO_HTTP_CODE), $errno,
                 (int) round(curl_getinfo($ch, CURLINFO_TOTAL_TIME) * 1000));
         } catch (\Throwable $e) {
-            return new Response('', 0, 2, 0);
+            return new Response('', 0, 2, 0, false);
         } finally {
             if ($ch !== null && $ch !== false) curl_close($ch);
         }
