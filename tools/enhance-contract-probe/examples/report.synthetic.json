@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "correlation": "00000000000000000000000000000000",
+  "method": "GET",
+  "route": "/licence",
+  "http": 200,
+  "errno": 0,
+  "duration_ms": 1,
+  "body_present": true,
+  "format": "json",
+  "json_valid": true,
+  "root": "object",
+  "structure": {
+    "type": "object",
+    "properties": {
+      "valid": "<boolean>"
+    },
+    "omitted_keys": 0,
+    "unknown_value_shapes": []
+  },
+  "consumed_fields_present": {
+    "id": false,
+    "name": false,
+    "items": false,
+    "total": false,
+    "isSuspended": false,
+    "suspendedBy": false,
+    "suspended": false,
+    "status": false,
+    "roles": false,
+    "isActive": false,
+    "planId": false,
+    "subscriptionId": false,
+    "ownerEmail": false,
+    "email": false,
+    "domain": false,
+    "primaryDomain": false,
+    "url": false,
+    "loginUrl": false,
+    "subscriptionsCount": false,
+    "websitesCount": false,
+    "plan": false,
+    "package": false,
+    "planName": false,
+    "packageId": false
+  },
+  "phase_1b_category": "indeterminate"
+}

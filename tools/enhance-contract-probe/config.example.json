@@ -1,0 +1,12 @@
+{
+  "environment": "homologation",
+  "host": "enhance-lab.example.invalid",
+  "pinned_ip": "192.0.2.10",
+  "tls_verify": true,
+  "blocked_hosts": ["production.example.invalid"],
+  "blocked_ips": ["192.0.2.20"],
+  "master_org": "replace-with-lab-master-id",
+  "plan_a": 1,
+  "plan_b": 2,
+  "session_directory": "/replace-with-private-directory-outside-repository"
+}

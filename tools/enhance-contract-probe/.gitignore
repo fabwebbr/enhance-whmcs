@@ -1,0 +1,12 @@
+# Local probe material only; tracked examples and tests remain visible.
+.env
+.env.*
+config.local.json
+credentials.json
+credentials.local.*
+session-*.json
+manifest-*.json
+report.local.*
+report.raw.*
+*.tmp
+runtime/

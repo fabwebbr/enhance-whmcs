@@ -1,0 +1,47 @@
+{
+  "synthetic": true,
+  "purpose": "structure-only; not evidence of Enhance API",
+  "operation": "licence",
+  "observation": {
+    "http": 200,
+    "body_present": true,
+    "format": "json",
+    "json_valid": true,
+    "root": "object",
+    "structure": {
+      "type": "object",
+      "properties": {
+        "valid": "<boolean>"
+      },
+      "omitted_keys": 0,
+      "unknown_value_shapes": []
+    },
+    "consumed_fields_present": {
+      "id": false,
+      "name": false,
+      "items": false,
+      "total": false,
+      "isSuspended": false,
+      "suspendedBy": false,
+      "suspended": false,
+      "status": false,
+      "roles": false,
+      "isActive": false,
+      "planId": false,
+      "subscriptionId": false,
+      "ownerEmail": false,
+      "email": false,
+      "domain": false,
+      "primaryDomain": false,
+      "url": false,
+      "loginUrl": false,
+      "subscriptionsCount": false,
+      "websitesCount": false,
+      "plan": false,
+      "package": false,
+      "planName": false,
+      "packageId": false
+    },
+    "phase_1b_category": "indeterminate"
+  }
+}

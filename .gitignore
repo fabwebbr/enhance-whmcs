@@ -1,0 +1,3 @@
+# Local environment files; probe-specific artifacts are ignored in its directory.
+/.env
+/.env.*
