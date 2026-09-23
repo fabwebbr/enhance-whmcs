@@ -44,5 +44,5 @@
     "planName": false,
     "packageId": false
   },
-  "phase_1b_category": "indeterminate"
+  "phase_1b_category": "invalid_schema"
 }

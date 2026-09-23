@@ -159,7 +159,7 @@ foreach (['owner', 'rename-org', 'suspend-org', 'reactivate-org', 'change-plan',
     $tests['unknown contract remains closed ' . $operation] = function () use ($operation) {
         [$p, $f, $c, $e, $s] = prepare(); $f->queue[] = new Response('{}', 200, 0, 1);
         $r = $p->run($operation, $c, $e, $s, true, true, 'CONFIRM ' . $s);
-        check($r['phase_1b_category'] === 'indeterminate' && $r['session_state'] === 'indeterminate'); safe($r);
+        check($r['phase_1b_category'] === ($operation === 'recover-password' ? 'invalid_schema' : 'indeterminate') && $r['session_state'] === 'indeterminate'); safe($r);
         check(!str_contains($r['route'], '?') && !str_contains($r['route'], 'fictional'));
         rejects(fn() => $p->run('delete-org', $c, $e, $s, true, true, 'CONFIRM ' . $s)); check(count($f->requests) === 5);
     };
@@ -188,7 +188,7 @@ $tests['synthetic structural fixture is reproducible without promoting success']
     $fixture = json_decode(file_get_contents(dirname(__DIR__) . '/examples/fixture.synthetic.json'), true, 64, JSON_THROW_ON_ERROR);
     $report = Structure::report('licence', new Response('{"valid":true}', 200, 0, 1), 'local');
     $actual = json_decode(json_encode(array_intersect_key($report, $fixture['observation'])), true);
-    check($actual === $fixture['observation'] && $report['phase_1b_category'] === 'indeterminate'); safe($actual);
+    check($actual === $fixture['observation'] && $report['phase_1b_category'] === 'invalid_schema'); safe($actual);
 };
 foreach ([
     'licence' => ['valid' => true],
@@ -208,7 +208,7 @@ foreach ([
     $tests['prepared read uses only fake transport ' . $operation] = function () use ($operation, $body) {
         [$p, $f, $c, $e, $s] = prepare(); $f->queue[] = new Response(json_encode($body), 200, 0, 1);
         $r = $p->run($operation, $c, $e, $s, true);
-        check($r['phase_1b_category'] === ($operation === 'licence' ? 'indeterminate' : 'success'));
+        check($r['phase_1b_category'] === ($operation === 'licence' ? 'invalid_schema' : 'success'));
         check(count($f->requests) === 5 && $f->requests[4]['method'] === 'GET');
         check(!str_contains($r['route'], '?') && !str_contains($r['route'], 'fictional'));
         safe($r);

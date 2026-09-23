@@ -1,5 +1,7 @@
 # Fase 1C-A — probe de contratos Enhance
 
+> Atualização offline Fase 1C-B: consulte [contratos 12.25.12](../../docs/contracts-phase-1c-b.md). Licença/Owner/PATCH/DELETE/recuperação agora possuem reconhecimento documentado por operação. As menções históricas abaixo a contratos desconhecidos/recuperação 204 não descrevem mais o classificador atual. GET de assinatura permanece pendente. Nenhuma execução real autorizada.
+
 Preparação, não homologação. Base: `f19f5f6d549f397c778969357d15118280b79b67`.
 Nenhuma chamada externa foi feita nesta entrega. Os contratos produtivos não mudam.
 Consulte [o inventário e a matriz](contracts.md) antes de preparar qualquer execução.

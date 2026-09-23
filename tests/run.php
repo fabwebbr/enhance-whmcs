@@ -111,9 +111,9 @@ foreach ([false, true] as $debug) {
     };
     $tests['password recovery / ' . $suffix] = static function () use ($debug): void {
         reply('', 204);
-        $result = api($debug)->triggerPasswordRecovery(EMAIL);
+        $result = expectFailure(static fn() => api($debug)->triggerPasswordRecovery(EMAIL), 'unexpected_empty_response', 204);
         check(json_decode(request()[CURLOPT_POSTFIELDS], true) === ['email' => EMAIL], 'Recovery email changed');
-        check($result === ['_raw' => '', '_httpCode' => 204], '204 return changed');
+        check($result->httpCode === 204, 'Undocumented recovery status accepted');
     };
     foreach ([SSO, json_encode(SSO, JSON_UNESCAPED_SLASHES), json_encode(['url' => SSO]), json_encode(['loginUrl' => SSO])] as $index => $raw) {
         $tests['SSO preserved format ' . $index . ' / ' . $suffix] = static function () use ($debug, $raw): void {
@@ -225,6 +225,8 @@ $tests['no production file/debug or alternative logging sinks'] = static functio
 
 require __DIR__ . '/transport.php';
 require __DIR__ . '/review-regressions.php';
+require __DIR__ . '/documented-contracts.php';
+require __DIR__ . '/subscription-resolution.php';
 
 $before = fingerprints();
 $passed = 0;

@@ -1,5 +1,7 @@
 # Fase 1B — transporte HTTP
 
+> Atualização offline Fase 1C-B: consulte [contratos 12.25.12](contracts-phase-1c-b.md). Licença/Owner/PATCH/DELETE/recuperação agora possuem reconhecimento documentado por operação. As menções históricas abaixo a contratos desconhecidos/recuperação 204 não descrevem mais o classificador atual. GET de assinatura permanece pendente. Nenhuma execução real autorizada.
+
 Base limpa: `06300fb9d1647dfdf879e8f9ef83024950adfa7d` (correções da suíte),
 com logging da Fase 1A em `b197589`. Sem acesso a documentação/API externa.
 

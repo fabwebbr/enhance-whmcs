@@ -35,7 +35,7 @@ foreach (['organisation', 'emails', 'customers', 'resetPassword', 'suspendOrg', 
                 check($GLOBALS['httpAttempts'] - $before === $expected, 'Callback continued HTTP after failure');
                 check(\WHMCS\Database\Capsule::$writes === [], 'Callback mutated database after failure');
                 check(lastLog()['output'][3]['result'] === match ($failure) {
-                    'remote' => 'remote_error', 'transport' => 'transport_error', default => 'indeterminate',
+                    'remote' => 'remote_error', 'transport' => 'transport_error', default => $operation === 'resetPassword' ? 'invalid_schema' : 'indeterminate',
                 }, 'Failure did not reach the intended transport classification');
             } finally { $_POST = []; }
         };

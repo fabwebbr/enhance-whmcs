@@ -19,11 +19,27 @@ final class EnhanceHttpResult implements JsonSerializable
     /**
      * Provisional minimum contracts inferred ONLY from existing consumers/fixtures.
      * No production operation declares 404 absence yet: API confirmation is missing.
-     * The licence success schema is unknown; do not invent a positive assertion.
+     * Selected contracts below are documented by orchd 12.25.12, not homologated.
      */
     public static function contract(string $method, string $path): array
     {
         $route = EnhanceLog::endpoint($path);
+        // Identity is method + exact sanitized route, never a method-wide ACK rule.
+        $documented = [
+            'GET /licence' => ['getLicenceInfo', 'licence', 200, false],
+            'POST /orgs/{id}/members' => ['createMember', 'uuid', 201, false],
+            'PATCH /orgs/{id}' => ['updateOrg', 'ack', 204, true],
+            'PATCH /orgs/{id}/subscriptions/{id}' => ['updateSubscription', 'ack', 204, true],
+            'DELETE /orgs/{id}/websites/{id}' => ['deleteWebsite', 'ack', 204, true],
+            'DELETE /orgs/{id}/subscriptions/{id}' => ['deleteSubscription', 'ack', 204, true],
+            'DELETE /orgs/{id}' => ['deleteOrg', 'ack', 204, true],
+            'PUT /login/password-recovery' => ['startPasswordRecovery', 'ack', 200, true],
+        ];
+        if (isset($documented[$method . ' ' . $route])) {
+            [$operation, $shape, $status, $empty] = $documented[$method . ' ' . $route];
+            return ['operation' => $operation, 'shape' => $shape, 'status' => $status,
+                'empty' => $empty, 'not_found' => false, 'evidence' => 'documented'];
+        }
         $shape = 'unknown';
         if ($method === 'GET') {
             $shapes = [
@@ -46,16 +62,9 @@ final class EnhanceHttpResult implements JsonSerializable
             '/logins', '/orgs/{id}/websites',
         ], true)) {
             $shape = 'id';
-        } elseif (($method === 'POST' && $route === '/orgs/{id}/members')
-            || ($method === 'PATCH' && in_array($route, ['/orgs/{id}', '/orgs/{id}/subscriptions/{id}'], true))
-            || ($method === 'DELETE' && in_array($route, ['/orgs/{id}', '/orgs/{id}/subscriptions/{id}', '/orgs/{id}/websites/{id}'], true))) {
-            // No success body/204 contract is demonstrated for these acknowledgements.
-            $shape = 'unknown';
-        } elseif ($method === 'PUT' && $route === '/login/password-recovery') {
-            $shape = 'unknown';
         }
         return ['shape' => $shape, 'not_found' => false,
-            'empty_204' => $method === 'PUT' && $route === '/login/password-recovery'];
+            'empty_204' => false];
     }
 
     /** $contract is internal policy, never derived from response/request parameters. */
@@ -78,6 +87,17 @@ final class EnhanceHttpResult implements JsonSerializable
             };
             // An HTTP error body is not needed by existing functional consumers.
             return self::failure($category, $httpCode);
+        }
+        if (isset($contract['operation'], $contract['status'])) {
+            if ($httpCode !== $contract['status']) {
+                return self::failure($httpCode === 204 ? 'unexpected_empty_response' : 'indeterminate', $httpCode);
+            }
+            if ($contract['empty'] === true) {
+                // Whitespace is still an unexpected body; do not trim ACKs.
+                return $raw === ''
+                    ? new self('success', 'empty', $httpCode, 0, ['_raw' => ''])
+                    : self::failure('invalid_schema', $httpCode);
+            }
         }
         if (!in_array($httpCode, [200, 201, 204], true)) {
             return self::failure('indeterminate', $httpCode);
@@ -122,6 +142,11 @@ final class EnhanceHttpResult implements JsonSerializable
         return new self('success', 'json', $httpCode, 0, $data);
     }
 
+    private static function isUuid($value): bool
+    {
+        return is_string($value) && preg_match('/\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/iD', $value) === 1;
+    }
+
     private static function isId($value): bool
     {
         return (is_int($value) && $value > 0) || (is_string($value) && trim($value) !== '' && $value !== '0');
@@ -135,19 +160,22 @@ final class EnhanceHttpResult implements JsonSerializable
 
     private static function valid(string $shape, array $data): bool
     {
+        if ($shape === 'uuid') return self::isUuid($data['id'] ?? null);
+        if ($shape === 'licence') {
+            return isset($data['status']) && is_string($data['status'])
+                && in_array($data['status'], ['active', 'cancelled', 'suspended', 'trial', 'unpaid', 'unknown'], true)
+                && (!array_key_exists('key', $data) || self::isUuid($data['key']));
+        }
         if ($shape === 'id') return self::isId($data['id'] ?? null);
         if ($shape === 'org') return self::isId($data['id'] ?? null) && isset($data['name']) && is_string($data['name']);
         if ($shape === 'subscription') {
-            // Both provisioning and daily sync consume these fields. Alternative
-            // status-only shapes are insufficient for their shared interpretation.
-            if (!self::isId($data['id'] ?? null)) return false;
-            if (array_key_exists('isSuspended', $data)) {
-                if (!is_bool($data['isSuspended'])) return false;
-                if ($data['isSuspended'] === false && (!empty($data['suspendedBy'])
-                    || !empty($data['suspended']) || ($data['status'] ?? null) === 'suspended')) return false;
-                return true;
-            }
-            return !empty($data['suspendedBy']) && is_string($data['suspendedBy'])
+            // Only the explicit pre-1C-B boolean fixtures are understood by all
+            // consumers. Do not infer state from the documented status/suspendedBy
+            // fields or reconcile mixed representations while that work is pending.
+            return self::isId($data['id'] ?? null)
+                && array_key_exists('isSuspended', $data) && is_bool($data['isSuspended'])
+                && !array_key_exists('status', $data)
+                && !array_key_exists('suspendedBy', $data)
                 && !array_key_exists('suspended', $data);
         }
         if ($shape === 'emails') return isset($data['total']) && is_int($data['total']) && $data['total'] >= 0;
@@ -171,6 +199,14 @@ final class EnhanceHttpResult implements JsonSerializable
             }
         }
         return true;
+    }
+
+    /** Apply the individual-resource gate to a selected collection item before writes. */
+    public static function requireSubscriptionState(array $subscription): void
+    {
+        if (!self::valid('subscription', $subscription)) {
+            throw new EnhanceTransportException('invalid_schema', 'json', 200, 0);
+        }
     }
 
     /** Public compatibility adapter: failures NEVER return code-shaped pseudo-data. */

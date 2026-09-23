@@ -1,5 +1,7 @@
 # Inventário e matriz de homologação futura
 
+> Atualização offline Fase 1C-B: consulte [contratos 12.25.12](../../docs/contracts-phase-1c-b.md). Licença/Owner/PATCH/DELETE/recuperação agora possuem reconhecimento documentado por operação. As menções históricas abaixo a contratos desconhecidos/recuperação 204 não descrevem mais o classificador atual. GET de assinatura permanece pendente. Nenhuma execução real autorizada.
+
 Base inspecionada: `f19f5f6d549f397c778969357d15118280b79b67`, PHP 8.1.34.
 Fontes exclusivamente locais: `EnhanceApi.php`, `EnhanceHttpResult.php`, consumidores
 em `enhance.php`, hooks/importador e testes `tests/run.php` / `tests/transport.php`.

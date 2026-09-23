@@ -76,9 +76,9 @@ $tests['explicit synthetic operation declares 404 absence only'] = static functi
 };
 $tests['204 is restricted to password recovery fixture'] = static function (): void {
     reply('', 204);
-    expectFailure(static fn() => api(true)->deleteOrg('fake-org'), 'unexpected_empty_response', 204);
+    check(api(true)->deleteOrg('fake-org') === ['_raw' => '', '_httpCode' => 204], 'Documented DELETE ACK rejected');
     reply('', 204);
-    check(api(true)->triggerPasswordRecovery(EMAIL) === ['_raw' => '', '_httpCode' => 204], 'Expected recovery 204 changed');
+    expectFailure(static fn() => api(true)->triggerPasswordRecovery(EMAIL), 'unexpected_empty_response', 204);
 };
 $tests['204 containing body rejected even on recovery'] = static function (): void {
     reply(BODY_SENTINEL, 204);
@@ -90,7 +90,7 @@ $tests['unknown acknowledgement remains indeterminate'] = static function (): vo
 };
 $tests['unknown licence schema cannot confirm connection'] = static function (): void {
     reply('{"valid":true}');
-    expectFailure(static fn() => api(false)->getLicense(), 'indeterminate', 200);
+    expectFailure(static fn() => api(false)->getLicense(), 'invalid_schema', 200);
 };
 $tests['diagnostic serialization excludes successful private payload'] = static function (): void {
     $result = EnhanceHttpResult::classify(json_encode(['id' => 'fake'] + payload()), 200, 0, ['shape' => 'id']);
@@ -163,7 +163,6 @@ $consumerFailures = [
 foreach ($consumerFailures as $label => [$raw, $status, $errno, $category]) {
     foreach (['syncCustomerFromWhmcs', '_enhance_resolve_subscription', 'createCustomerOrg', 'enhance_CreateAccount', 'enhance_TestConnection'] as $consumer) {
         $tests[$consumer . ' stops after ' . $label] = static function () use ($consumer, $raw, $status, $errno, $category): void {
-            if ($consumer === 'enhance_TestConnection' && $category === 'invalid_schema') $category = 'indeterminate';
             $before = $GLOBALS['httpAttempts'];
             $params = consumerParams();
             if ($consumer === 'syncCustomerFromWhmcs') {

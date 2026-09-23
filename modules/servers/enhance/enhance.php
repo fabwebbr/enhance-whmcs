@@ -88,6 +88,7 @@ function _enhance_resolve_subscription(EnhanceApi $api, array $params): array
 
     $items = $subs["items"] ?? [];
     if (count($items) === 1 && !empty($items[0]["id"])) {
+        EnhanceHttpResult::requireSubscriptionState($items[0]);
         $subId = (string) $items[0]["id"];
         $api->saveServiceSubscriptionId($packageId, $serviceId, $subId);
         return ["orgId" => $orgId, "subId" => $subId, "subscription" => $items[0], "synced" => $sync];
@@ -97,6 +98,7 @@ function _enhance_resolve_subscription(EnhanceApi $api, array $params): array
     foreach ($items as $item) {
         $itemPlanId = (int) ($item["planId"] ?? ($item["plan"]["id"] ?? 0));
         if ($planId > 0 && $itemPlanId === $planId && !empty($item["id"])) {
+            EnhanceHttpResult::requireSubscriptionState($item);
             $subId = (string) $item["id"];
             $api->saveServiceSubscriptionId($packageId, $serviceId, $subId);
             return ["orgId" => $orgId, "subId" => $subId, "subscription" => $item, "synced" => $sync];
