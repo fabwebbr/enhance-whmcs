@@ -227,6 +227,7 @@ require __DIR__ . '/transport.php';
 require __DIR__ . '/review-regressions.php';
 require __DIR__ . '/documented-contracts.php';
 require __DIR__ . '/subscription-resolution.php';
+require __DIR__ . '/subscription-state.php';
 
 $before = fingerprints();
 $passed = 0;
